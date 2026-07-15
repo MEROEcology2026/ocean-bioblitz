@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a192f">
+<title>Ocean BioBlitz — Marine Biology Typing Game</title>
+<style>
+/* ============================================================
+   OCEAN BIOBLITZ — deep-ocean typing game
+   Palette: abyss #0a192f → shelf #004b6e, cyan #4dd8ff,
+   kelp-neon #2dffb3, coral-alert #ff4d6d, sand #ffe9c2
+   ============================================================ */
+:root{
+  --abyss:#0a192f;
+  --shelf:#004b6e;
+  --ink:#eaf6ff;
+  --dim:#8fb8cf;
+  --cyan:#4dd8ff;
+  --neon:#2dffb3;
+  --alert:#ff4d6d;
+  --sand:#ffe9c2;
+  --panel:rgba(6,26,46,.72);
+  --panel-line:rgba(77,216,255,.25);
+  --vvh:100dvh;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono','JetBrains Mono',Menlo,Consolas,monospace;
+  --sans:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  background:linear-gradient(180deg,#04101f 0%,var(--abyss) 30%,#062e4c 68%,var(--shelf) 100%);
+  overflow:hidden;
+  position:fixed;
+  inset:0;
+  touch-action:manipulation;
+}
+#app{
+  height:var(--vvh);
+  width:100%;
+  max-width:1100px;
+  margin:0 auto;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+button{font-family:inherit;cursor:pointer;border:none;color:inherit;background:none}
+button:focus-visible,.diff:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:12px}
+
+/* ---------- ambient bubbles ---------- */
+#bubbles{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.bubble{
+  position:absolute;bottom:-40px;border-radius:50%;
+  background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.5),rgba(77,216,255,.14) 55%,rgba(77,216,255,.04));
+  border:1px solid rgba(160,225,255,.22);
+  animation:rise linear infinite;
+}
+@keyframes rise{
+  0%{transform:translateY(0) translateX(0);opacity:0}
+  8%{opacity:.8}
+  92%{opacity:.6}
+  100%{transform:translateY(calc(-1*var(--vvh) - 80px)) translateX(28px);opacity:0}
+}
+/* faint light shafts */
+#app::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    linear-gradient(112deg,transparent 18%,rgba(120,220,255,.05) 24%,transparent 32%),
+    linear-gradient(105deg,transparent 55%,rgba(120,220,255,.045) 62%,transparent 71%);
+}
+
+/* ---------- screens ---------- */
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;z-index:2;
+  opacity:0;pointer-events:none;transition:opacity .45s ease;overflow:hidden}
+.screen.on{opacity:1;pointer-events:auto}
+
+/* ---------- MENU ---------- */
+#menu{align-items:center;justify-content:center;text-align:center;padding:24px;gap:18px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.35em;text-transform:uppercase;color:var(--cyan)}
+h1.title{
+  font-size:clamp(38px,9vw,72px);line-height:1.02;font-weight:800;letter-spacing:-.02em;
+  background:linear-gradient(180deg,#fff 20%,var(--cyan) 75%,#1e90c9);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 24px rgba(77,216,255,.25));
+}
+.tagline{color:var(--dim);max-width:46ch;font-size:15px;line-height:1.5}
+.menu-fact{
+  font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--sand);
+  background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;
+  padding:12px 16px;max-width:52ch;min-height:64px;display:flex;align-items:center;justify-content:center;
+}
+.diff-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.diff{
+  border:1px solid var(--panel-line);background:var(--panel);border-radius:14px;
+  padding:12px 16px;min-width:104px;transition:.2s;
+}
+.diff small{display:block;color:var(--dim);font-size:11px;margin-top:3px}
+.diff b{font-size:15px}
+.diff.sel{border-color:var(--neon);box-shadow:0 0 0 1px var(--neon),0 0 24px rgba(45,255,179,.25);background:rgba(45,255,179,.08)}
+.big-btn{
+  margin-top:6px;font-size:18px;font-weight:700;letter-spacing:.04em;
+  padding:16px 44px;border-radius:999px;color:#04222f;
+  background:linear-gradient(180deg,var(--neon),#12cf8c);
+  box-shadow:0 8px 30px rgba(45,255,179,.35),inset 0 1px 0 rgba(255,255,255,.5);
+  transition:transform .15s;
+}
+.big-btn:active{transform:scale(.96)}
+.menu-hint{font-size:12px;color:var(--dim)}
+
+/* ---------- GAME : HUD ---------- */
+#hud{
+  z-index:3;display:flex;align-items:center;gap:10px;
+  padding:calc(8px + env(safe-area-inset-top)) 12px 8px;
+}
+.stat{
+  flex:0 0 auto;background:var(--panel);border:1px solid var(--panel-line);
+  border-radius:12px;padding:6px 10px;text-align:center;min-width:64px;
+}
+.stat .v{font-family:var(--mono);font-weight:700;font-size:16px;color:#fff}
+.stat .l{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+#comboStat .v{color:var(--neon)}
+#comboStat.hot{animation:comboPulse .5s ease}
+@keyframes comboPulse{40%{transform:scale(1.15)}}
+.health-wrap{flex:1;min-width:90px}
+.health-label{display:flex;justify-content:space-between;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+#healthBar{height:12px;border-radius:999px;background:rgba(0,0,0,.4);border:1px solid var(--panel-line);overflow:hidden}
+#healthFill{
+  height:100%;width:100%;border-radius:999px;transition:width .35s ease,background .35s;
+  background:linear-gradient(90deg,#12cf8c,var(--neon));
+  box-shadow:0 0 12px rgba(45,255,179,.5);
+}
+#healthFill.mid{background:linear-gradient(90deg,#ffb020,#ffd166);box-shadow:0 0 12px rgba(255,176,32,.5)}
+#healthFill.low{background:linear-gradient(90deg,#d9214f,var(--alert));box-shadow:0 0 12px rgba(255,77,109,.6)}
+
+/* ---------- GAME : fact banner ---------- */
+#fact{
+  z-index:3;margin:0 12px;min-height:38px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12.5px;line-height:1.4;text-align:center;color:var(--sand);
+  background:linear-gradient(90deg,transparent,rgba(6,26,46,.85) 12%,rgba(6,26,46,.85) 88%,transparent);
+  border-radius:10px;padding:6px 14px;
+  opacity:0;transform:translateY(-6px);transition:.35s ease;
+}
+#fact.show{opacity:1;transform:none}
+
+/* ---------- GAME : play area ---------- */
+#play{position:relative;flex:1;min-height:120px;z-index:2;overflow:hidden}
+.entity{position:absolute;left:0;top:0;will-change:transform}
+.entity .body{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  filter:drop-shadow(0 4px 14px rgba(0,0,0,.45));
+}
+.entity .sprite{font-size:38px;line-height:1;animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px) rotate(-3deg)}}
+.entity.threat .sprite{animation-name:menace}
+@keyframes menace{50%{transform:translateY(-4px) rotate(6deg) scale(1.05)}}
+.entity .word{
+  font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:.04em;white-space:nowrap;
+  background:var(--panel);border:1px solid var(--panel-line);
+  border-radius:9px;padding:4px 9px;color:#fff;
+}
+.entity.threat .word{border-color:rgba(255,77,109,.5);background:rgba(46,8,20,.78)}
+.entity .word .hit{color:var(--neon);text-shadow:0 0 10px rgba(45,255,179,.8)}
+.entity.locked{z-index:5}
+.entity.locked .word{
+  border-color:var(--neon);
+  box-shadow:0 0 0 1px var(--neon),0 0 22px rgba(45,255,179,.35);
+}
+.entity.locked::after{ /* sonar lock ring */
+  content:"";position:absolute;inset:-12px -8px;border:1.5px solid rgba(45,255,179,.55);
+  border-radius:16px;animation:sonar 1.2s ease-out infinite;pointer-events:none;
+}
+@keyframes sonar{0%{transform:scale(.9);opacity:.9}100%{transform:scale(1.18);opacity:0}}
+.entity.typo .word{animation:shake .28s;border-color:var(--alert);box-shadow:0 0 18px rgba(255,77,109,.55)}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.entity.pop .body{animation:pop .4s ease forwards}
+@keyframes pop{
+  40%{transform:scale(1.25)}
+  100%{transform:scale(0);opacity:0}
+}
+.entity.sink .body{animation:sink .5s ease forwards}
+@keyframes sink{100%{transform:translateY(30px) scale(.6);opacity:0}}
+.float-score{
+  position:absolute;font-family:var(--mono);font-weight:800;font-size:16px;color:var(--neon);
+  text-shadow:0 0 12px rgba(45,255,179,.8);pointer-events:none;z-index:6;
+  animation:floatUp .9s ease-out forwards;
+}
+.float-score.bad{color:var(--alert);text-shadow:0 0 12px rgba(255,77,109,.8)}
+@keyframes floatUp{100%{transform:translateY(-46px);opacity:0}}
+
+/* ---------- GAME : typing dock ---------- */
+#dock{
+  z-index:4;padding:8px 12px calc(10px + env(safe-area-inset-bottom));
+}
+.dock-inner{position:relative}
+#preview{
+  font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.06em;
+  min-height:56px;display:flex;align-items:center;justify-content:center;gap:2px;
+  background:rgba(4,18,33,.9);border:1.5px solid var(--panel-line);border-radius:16px;
+  padding:10px 14px;text-align:center;white-space:nowrap;overflow:hidden;
+  transition:border-color .2s, box-shadow .2s;
+}
+#preview .hit{color:var(--neon);text-shadow:0 0 12px rgba(45,255,179,.7)}
+#preview .rest{color:rgba(234,246,255,.85)}
+#preview .caret{display:inline-block;width:2px;height:1.1em;background:var(--cyan);margin:0 1px;animation:blink 1s steps(1) infinite;vertical-align:-3px}
+@keyframes blink{50%{opacity:0}}
+#preview .idle{color:var(--dim);font-size:13.5px;font-weight:500;letter-spacing:.03em;white-space:normal;line-height:1.35}
+#preview.err{border-color:var(--alert);box-shadow:0 0 18px rgba(255,77,109,.35);animation:shake .28s}
+#preview.focused{border-color:var(--cyan);box-shadow:0 0 16px rgba(77,216,255,.25)}
+/* the REAL input sits invisibly on top of the preview so the caret/keyboard
+   anchor exactly here and the page never scroll-jumps */
+#typer{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:.01;border:none;background:transparent;color:transparent;caret-color:transparent;
+  font-size:16px; /* >=16px prevents iOS zoom-on-focus */
+}
+
+/* keyboard resume overlay (mobile focus lost) */
+#kbOverlay{
+  position:absolute;inset:0;z-index:9;display:none;align-items:center;justify-content:center;
+  background:rgba(4,14,26,.6);backdrop-filter:blur(3px);
+}
+#kbOverlay.on{display:flex}
+#kbBtn{
+  font-size:17px;font-weight:700;padding:16px 30px;border-radius:999px;color:#04222f;
+  background:linear-gradient(180deg,var(--cyan),#1fa8dd);
+  box-shadow:0 10px 34px rgba(77,216,255,.4);animation:comboPulse 1.6s ease infinite;
+}
+
+/* ---------- GAME OVER ---------- */
+#over{align-items:center;justify-content:center;text-align:center;padding:24px;gap:16px}
+#over h2{font-size:clamp(30px,7vw,52px);font-weight:800;letter-spacing:-.02em;color:#fff}
+#overSub{color:var(--dim);font-size:14px;max-width:44ch;line-height:1.5}
+.results{display:grid;grid-template-columns:repeat(2,minmax(120px,150px));gap:10px}
+.res{background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;padding:14px 10px}
+.res .v{font-family:var(--mono);font-size:24px;font-weight:800;color:var(--neon)}
+.res .l{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+.over-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.ghost-btn{padding:14px 26px;border-radius:999px;border:1px solid var(--panel-line);background:var(--panel);font-weight:600}
+
+/* ---------- responsive / mobile ---------- */
+@media (max-width:640px){
+  .entity .sprite{font-size:32px}
+  .entity .word{font-size:14.5px}
+  .stat{min-width:56px;padding:5px 8px}
+  .stat .v{font-size:14px}
+  #wpmStat,#accStat{display:none} /* keep HUD lean on phones; shown on game-over */
+  #fact{font-size:11.5px;min-height:34px}
+}
+@media (prefers-reduced-motion:reduce){
+  .bubble,.entity .sprite,#kbBtn{animation:none!important}
+  .entity.locked::after{animation:none;opacity:.6}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bubbles" aria-hidden="true"></div>
+
+  <!-- ================= START MENU ================= -->
+  <section id="menu" class="screen on">
+    <div class="kicker">marine biology · typing field survey</div>
+    <h1 class="title">Ocean BioBlitz</h1>
+    <p class="tagline">You are the ship’s biologist on a survey dive. Type the drifting words to log species in your field journal 🔬 and remove invasive species 🦁 before they spread. Every entry is real marine biology.</p>
+    <div class="menu-fact" id="menuFact">Octopuses have three hearts — two just for pumping blood through the gills.</div>
+    <div class="diff-row" role="radiogroup" aria-label="Difficulty">
+      <button class="diff sel" data-diff="0"><b>🤿 Snorkeler</b><small>calm currents</small></button>
+      <button class="diff" data-diff="1"><b>🌊 Diver</b><small>open water</small></button>
+      <button class="diff" data-diff="2"><b>🦑 Abyss</b><small>crushing depths</small></button>
+    </div>
+    <button class="big-btn" id="startBtn">▸ Dive In</button>
+    <div class="menu-hint">📱 On mobile, your keyboard opens automatically — just start typing.</div>
+  </section>
+
+  <!-- ================= GAMEPLAY ================= -->
+  <section id="game" class="screen" aria-label="Gameplay">
+    <div id="hud">
+      <div class="stat"><div class="v" id="scoreV">0</div><div class="l">Score</div></div>
+      <div class="stat" id="comboStat"><div class="v" id="comboV">×1</div><div class="l">Combo</div></div>
+      <div class="stat" id="wpmStat"><div class="v" id="wpmV">0</div><div class="l">WPM</div></div>
+      <div class="stat" id="accStat"><div class="v" id="accV">100%</div><div class="l">Acc</div></div>
+      <div class="health-wrap">
+        <div class="health-label"><span>Survey Health</span><span id="healthV">100</span></div>
+        <div id="healthBar"><div id="healthFill"></div></div>
+      </div>
+    </div>
+    <div id="fact" role="status" aria-live="polite"></div>
+    <div id="play"></div>
+    <div id="dock">
+      <div class="dock-inner">
+        <div id="preview"><span class="idle">Start typing any word you see…</span></div>
+        <input id="typer" type="text" autocomplete="off" autocorrect="off" autocapitalize="none"
+               spellcheck="false" enterkeyhint="go" aria-label="Type the words on screen">
+      </div>
+    </div>
+    <div id="kbOverlay"><button id="kbBtn">⌨️ Tap to keep typing</button></div>
+  </section>
+
+  <!-- ================= GAME OVER ================= -->
+  <section id="over" class="screen">
+    <div class="kicker">logbook closed</div>
+    <h2>Survey Health Depleted</h2>
+    <p id="overSub"></p>
+    <div class="results">
+      <div class="res"><div class="v" id="rScore">0</div><div class="l">Final score</div></div>
+      <div class="res"><div class="v" id="rWpm">0</div><div class="l">WPM</div></div>
+      <div class="res"><div class="v" id="rAcc">0%</div><div class="l">Accuracy</div></div>
+      <div class="res"><div class="v" id="rCombo">×1</div><div class="l">Peak combo</div></div>
+      <div class="res"><div class="v" id="rSaved">0</div><div class="l">Species logged</div></div>
+      <div class="res"><div class="v" id="rCleaned">0</div><div class="l">Invasives removed</div></div>
+    </div>
+    <div class="over-row">
+      <button class="big-btn" id="againBtn">▸ Dive Again</button>
+      <button class="ghost-btn" id="menuBtn">Back to surface</button>
+    </div>
+  </section>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   WORD BANK — every entry teaches one true fact of marine biology.
+   t: 'life' (specimen — log it) | 'threat' (invasive — remove it)
+   tier: 1 short → 3 long/advanced (unlocks as difficulty scales)
+   ============================================================ */
+const WORDS = [
+  // --- tier 1 : specimens (log them) ---
+  {w:'kelp',  e:'🌿', t:'life', tier:1, f:'Kelp is not a plant — it is a giant brown alga that can grow 60 cm in a day.'},
+  {w:'crab',  e:'🦀', t:'life', tier:1, f:'Crabs taste with their feet, using sensory hairs on their walking legs.'},
+  {w:'orca',  e:'🐳', t:'life', tier:1, f:'Orcas are the largest members of the dolphin family.'},
+  {w:'tuna',  e:'🐟', t:'life', tier:1, f:'Tuna must swim nonstop to keep oxygen-rich water flowing over their gills.'},
+  {w:'squid', e:'🦑', t:'life', tier:1, f:'Squid jet through the water by firing it out of a siphon — backward.'},
+  {w:'coral', e:'🪸', t:'life', tier:1, f:'Each coral head is a colony of tiny cloned animals called polyps.'},
+  {w:'otter', e:'🦦', t:'life', tier:1, f:'Sea otter fur packs up to a million hairs per square inch — Earth\u2019s densest.'},
+  {w:'whale', e:'🐋', t:'life', tier:1, f:'A blue whale\u2019s heart can slow to two beats per minute on deep dives.'},
+  {w:'shark', e:'🦈', t:'life', tier:1, f:'Sharks detect the faint electric fields of hidden prey through skin pores.'},
+  {w:'moray', e:'🐍', t:'life', tier:1, f:'Moray eels have a second set of jaws that shoot forward to seize prey.'},
+  {w:'ray',   e:'🪁', t:'life', tier:1, f:'Rays are flat cousins of sharks, with skeletons made entirely of cartilage.'},
+  {w:'clam',  e:'🐚', t:'life', tier:1, f:'Giant clams farm algae inside their own tissue and harvest the sugars.'},
+  // --- tier 1 : invasive species (remove them) ---
+  {w:'lionfish', e:'🦁', t:'threat', tier:1, f:'Invasive lionfish carry 18 venomous spines and can spawn every 4 days.'},
+  {w:'lamprey',  e:'🪱', t:'threat', tier:1, f:'Sea lampreys are jawless fish that latch on with a toothed suction-cup mouth.'},
+  // --- tier 2 : specimens ---
+  {w:'clownfish', e:'🐠', t:'life', tier:2, f:'Clownfish all hatch male — the dominant fish in the group becomes female.'},
+  {w:'sea turtle',e:'🐢', t:'life', tier:2, f:'Sea turtles navigate whole oceans by reading Earth\u2019s magnetic field.'},
+  {w:'dolphin',   e:'🐬', t:'life', tier:2, f:'Dolphins sleep with one brain hemisphere at a time — one eye stays open.'},
+  {w:'jellyfish', e:'🪼', t:'life', tier:2, f:'Jellyfish have no brain, heart, or blood — and predate the dinosaurs.'},
+  {w:'octopus',   e:'🐙', t:'life', tier:2, f:'Octopuses keep two-thirds of their neurons in their arms.'},
+  {w:'sea star',  e:'⭐', t:'life', tier:2, f:'Sea stars push their stomachs out through their mouths to digest prey.'},
+  {w:'anemone',   e:'🌸', t:'life', tier:2, f:'Anemones sting with nematocysts — microscopic spring-loaded harpoons.'},
+  {w:'pufferfish',e:'🐡', t:'life', tier:2, f:'Pufferfish tetrodotoxin is roughly 1,200 times more toxic than cyanide.'},
+  {w:'seahorse',  e:'🐴', t:'life', tier:2, f:'Male seahorses carry the fertilized eggs and give birth to the young.'},
+  {w:'cuttlefish',e:'🦑', t:'life', tier:2, f:'Cuttlefish have W-shaped pupils and can see polarized light.'},
+  {w:'nautilus',  e:'🐚', t:'life', tier:2, f:'A nautilus hovers by adjusting gas inside its spiral shell chambers.'},
+  {w:'sponge',    e:'🧽', t:'life', tier:2, f:'Sponges are animals with no organs — living pumps that filter seawater.'},
+  {w:'baleen',    e:'🐋', t:'life', tier:2, f:'Baleen plates are keratin — the same protein as your fingernails.'},
+  // --- tier 2 : invasive species ---
+  {w:'green crab',  e:'🦀', t:'threat', tier:2, f:'One invasive green crab can crush and eat 40 juvenile clams a day.'},
+  {w:'zebra mussel',e:'🦓', t:'threat', tier:2, f:'Each zebra mussel filters a liter of water daily, starving native larvae.'},
+  {w:'sea walnut',  e:'🥜', t:'threat', tier:2, f:'The invasive sea walnut is a comb jelly that collapsed Black Sea fisheries.'},
+  {w:'caulerpa',    e:'🌱', t:'threat', tier:2, f:'Invasive Caulerpa algae is a single giant cell with thousands of nuclei.'},
+  // --- tier 3 : advanced marine biology ---
+  {w:'mantis shrimp',  e:'🦐', t:'life', tier:3, f:'Mantis shrimp strike with the acceleration of a .22 caliber bullet.'},
+  {w:'chromatophore',  e:'🎨', t:'life', tier:3, f:'Chromatophores are elastic pigment cells that repaint a squid in milliseconds.'},
+  {w:'echolocation',   e:'📡', t:'life', tier:3, f:'Toothed whales see with sound, reading the echoes of their own clicks.'},
+  {w:'bioluminescence',e:'🌟', t:'life', tier:3, f:'Most deep-sea species glow via luciferin — light made with almost no heat.'},
+  {w:'cephalopod',     e:'🐙', t:'life', tier:3, f:'Cephalopod means head-foot: octopus, squid, cuttlefish, and nautilus.'},
+  {w:'crustacean',     e:'🦞', t:'life', tier:3, f:'Crustaceans must shed their entire exoskeleton every time they grow.'},
+  {w:'echinoderm',     e:'🦔', t:'life', tier:3, f:'Echinoderms like sea stars crawl on hundreds of hydraulic tube feet.'},
+  {w:'invertebrate',   e:'🐌', t:'life', tier:3, f:'More than 95% of animal species are invertebrates — no backbone required.'},
+  {w:'photophore',     e:'✨', t:'life', tier:3, f:'Photophores are built-in light organs, often aimed down as camouflage.'},
+  {w:'countershading', e:'🎭', t:'life', tier:3, f:'Countershading — dark back, pale belly — hides animals from above and below.'},
+  {w:'metamorphosis',  e:'🫧', t:'life', tier:3, f:'Most reef fish begin as transparent drifting larvae before metamorphosis.'},
+  {w:'osmoregulation', e:'💧', t:'life', tier:3, f:'Marine fish drink seawater and pump out the salt — osmoregulation at work.'},
+  // --- tier 3 : invasive species ---
+  {w:'crown of thorns',e:'👑', t:'threat', tier:3, f:'Crown-of-thorns sea stars dissolve living coral tissue as they crawl.'},
+  {w:'tiger shrimp',   e:'🐯', t:'threat', tier:3, f:'Escaped Asian tiger shrimp prey on native shrimp and juvenile crabs.'},
+];
+
+const MENU_FACTS = [
+  'Octopuses have three hearts — two just for pumping blood through the gills.',
+  'The mantis shrimp punches with the acceleration of a bullet.',
+  'One jellyfish species can reverse its aging — biologically immortal.',
+  'A blue whale\u2019s tongue can weigh as much as an elephant.',
+  'Cuttlefish see polarized light that human eyes cannot perceive.',
+  'Sharks are older than trees — their lineage spans 400+ million years.',
+];
+
+/* ---- difficulty presets: [crossSeconds start→min, spawnMs start→min, tier2/tier3 unlock (sec)] ---- */
+const DIFFS = [
+  {name:'Snorkeler', cross:[20,11], spawn:[3400,1900], t2:30, t3:75, threat:.30},
+  {name:'Diver',     cross:[15, 8], spawn:[2700,1450], t2:15, t3:50, threat:.36},
+  {name:'Abyss',     cross:[11, 6], spawn:[2100,1050], t2:0,  t3:20, threat:.42},
+];
+const MAX_ON_SCREEN = 6;
+
+/* ============================================================
+   DOM refs & helpers
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const el = {
+  app:$('app'), menu:$('menu'), game:$('game'), over:$('over'),
+  play:$('play'), fact:$('fact'), preview:$('preview'), typer:$('typer'),
+  scoreV:$('scoreV'), comboV:$('comboV'), comboStat:$('comboStat'),
+  wpmV:$('wpmV'), accV:$('accV'), healthV:$('healthV'), healthFill:$('healthFill'),
+  kbOverlay:$('kbOverlay'), kbBtn:$('kbBtn'),
+  menuFact:$('menuFact'), startBtn:$('startBtn'),
+  againBtn:$('againBtn'), menuBtn:$('menuBtn'), overSub:$('overSub'),
+};
+const rand = (a,b) => a + Math.random()*(b-a);
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const clamp = (v,a,b) => Math.min(b,Math.max(a,v));
+
+/* ---- visual viewport sync: keeps play area above the mobile keyboard ---- */
+function syncViewport(){
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvh', h + 'px');
+  window.scrollTo(0,0); // undo any iOS focus-scroll
+}
+if (window.visualViewport){
+  visualViewport.addEventListener('resize', syncViewport);
+  visualViewport.addEventListener('scroll', syncViewport);
+}
+window.addEventListener('resize', syncViewport);
+syncViewport();
+
+/* ---- ambient bubbles (built once) ---- */
+(function makeBubbles(){
+  const wrap = $('bubbles'), n = 22, frag = document.createDocumentFragment();
+  for (let i=0;i<n;i++){
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const s = rand(5,20);
+    b.style.cssText = `width:${s}px;height:${s}px;left:${rand(0,100)}%;`+
+      `animation-duration:${rand(9,22)}s;animation-delay:${rand(-20,0)}s;`;
+    frag.appendChild(b);
+  }
+  wrap.appendChild(frag);
+})();
+
+/* ---- rotating menu fact ---- */
+let mfIdx = 0;
+setInterval(() => {
+  if (!el.menu.classList.contains('on')) return;
+  mfIdx = (mfIdx+1) % MENU_FACTS.length;
+  el.menuFact.style.opacity = 0;
+  setTimeout(() => { el.menuFact.textContent = MENU_FACTS[mfIdx]; el.menuFact.style.opacity = 1; }, 300);
+}, 5000);
+el.menuFact.style.transition = 'opacity .3s';
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+const G = {
+  state:'menu',        // menu | playing | paused | over
+  diff:0,
+  entities:[],         // live floating entities
+  target:null,         // locked entity
+  buffer:'',           // validated typed prefix of target's word
+  score:0, combo:0, peakCombo:0, mult:1,
+  keysTotal:0, keysHit:0,
+  health:100,
+  saved:0, cleaned:0,
+  startAt:0, elapsed:0,
+  lastSpawn:0, lastTs:0, raf:0,
+  factTimer:0, prevFocusLoop:0,
+};
+
+function setScreen(name){
+  for (const s of [el.menu, el.game, el.over]) s.classList.remove('on');
+  ({menu:el.menu, game:el.game, over:el.over})[name].classList.add('on');
+}
+
+/* ---------- difficulty selection ---------- */
+document.querySelectorAll('.diff').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    G.diff = +btn.dataset.diff;
+  });
+});
+
+/* ============================================================
+   GAME LIFECYCLE
+   ============================================================ */
+function startGame(){
+  Object.assign(G, {
+    state:'playing', entities:[], target:null, buffer:'',
+    score:0, combo:0, peakCombo:0, mult:1,
+    keysTotal:0, keysHit:0, health:100, saved:0, cleaned:0,
+    startAt:performance.now(), elapsed:0, lastSpawn:-9999, lastTs:performance.now(),
+  });
+  el.play.innerHTML = '';
+  el.typer.value = '';
+  el.fact.classList.remove('show');
+  hideKbOverlay();
+  setScreen('game');
+  updateHUD(); renderPreview();
+  focusTyper();           // inside the tap/click gesture → mobile keyboard opens
+  cancelAnimationFrame(G.raf);
+  G.raf = requestAnimationFrame(tick);
+}
+
+function endGame(){
+  G.state = 'over';
+  cancelAnimationFrame(G.raf);
+  el.typer.blur();
+  hideKbOverlay();
+  const wpm = currentWPM(), acc = currentAcc();
+  $('rScore').textContent = G.score.toLocaleString();
+  $('rWpm').textContent = wpm;
+  $('rAcc').textContent = acc + '%';
+  $('rCombo').textContent = '×' + Math.max(1, G.peakCombo);
+  $('rSaved').textContent = G.saved;
+  $('rCleaned').textContent = G.cleaned;
+  el.overSub.textContent = G.cleaned + G.saved >= 25
+    ? 'Textbook fieldwork — a logbook any research vessel would be proud of.'
+    : 'Every logged specimen is real data. The survey needs another dive.';
+  setScreen('over');
+}
+
+el.startBtn.addEventListener('click', startGame);
+el.againBtn.addEventListener('click', startGame);
+el.menuBtn.addEventListener('click', () => { G.state='menu'; setScreen('menu'); });
+
+/* ============================================================
+   SPAWNING & MOVEMENT
+   ============================================================ */
+function diffCfg(){ return DIFFS[G.diff]; }
+function scale01(){ return clamp(G.elapsed / 120, 0, 1); }   // ramps over 2 minutes
+
+function currentCross(){ const c = diffCfg().cross; return c[0] + (c[1]-c[0]) * scale01(); }
+function currentSpawnMs(){ const s = diffCfg().spawn; return s[0] + (s[1]-s[0]) * scale01(); }
+function allowedTier(){
+  const d = diffCfg();
+  return G.elapsed >= d.t3 ? 3 : G.elapsed >= d.t2 ? 2 : 1;
+}
+
+function spawnEntity(now){
+  if (G.entities.length >= MAX_ON_SCREEN) return;
+  const tierMax = allowedTier();
+  const onScreen = new Set(G.entities.map(e => e.word));
+  const wantThreat = Math.random() < diffCfg().threat;
+  let pool = WORDS.filter(x => x.tier <= tierMax && !onScreen.has(x.w) &&
+                                (wantThreat ? x.t==='threat' : x.t==='life'));
+  if (!pool.length) pool = WORDS.filter(x => x.tier <= tierMax && !onScreen.has(x.w));
+  if (!pool.length) return;
+  // avoid two on-screen words sharing a first letter when possible (cleaner lock-on)
+  const firsts = new Set(G.entities.map(e => e.word[0]));
+  const distinct = pool.filter(x => !firsts.has(x.w[0]));
+  const data = pick(distinct.length ? distinct : pool);
+
+  const node = document.createElement('div');
+  node.className = 'entity ' + data.t;
+  node.innerHTML = `<div class="body"><div class="sprite">${data.e}</div><div class="word"></div></div>`;
+  el.play.appendChild(node);
+
+  const pw = el.play.clientWidth, ph = el.play.clientHeight;
+  const h = node.offsetHeight || 70;
+  const ent = {
+    ...data, word:data.w, node,
+    wordEl: node.querySelector('.word'),
+    typed:0,
+    x: pw + 30,
+    y: rand(6, Math.max(8, ph - h - 10)),
+    speed: (pw + 90) / currentCross() * rand(.9, 1.12),
+    wobbleAmp: rand(4,10), wobbleSpd: rand(.8,1.6), born:now,
+    done:false,
+  };
+  renderWord(ent);
+  placeEntity(ent, now);
+  G.entities.push(ent);
+}
+
+function placeEntity(ent, now){
+  const wob = Math.sin((now - ent.born)/1000 * ent.wobbleSpd * Math.PI) * ent.wobbleAmp;
+  ent.node.style.transform = `translate(${ent.x}px, ${ent.y + wob}px)`;
+}
+
+function tick(now){
+  if (G.state !== 'playing') return;
+  const dt = Math.min(0.05, (now - G.lastTs)/1000);
+  G.lastTs = now;
+  G.elapsed = (now - G.startAt)/1000;
+
+  if (now - G.lastSpawn > currentSpawnMs()){ G.lastSpawn = now; spawnEntity(now); }
+
+  for (const ent of G.entities){
+    if (ent.done) continue;
+    ent.x -= ent.speed * dt;
+    placeEntity(ent, now);
+    if (ent.x < -ent.node.offsetWidth - 20) escapeEntity(ent);
+  }
+  G.entities = G.entities.filter(e => !e.remove);
+
+  el.wpmV.textContent = currentWPM();
+  G.raf = requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   TYPING ENGINE — sanitizing input loop (mobile-safe)
+   ============================================================ */
+el.typer.addEventListener('input', () => {
+  if (G.state !== 'playing'){ el.typer.value=''; return; }
+  const raw = el.typer.value;
+  // common prefix between what we validated and what the field now holds
+  let i = 0;
+  while (i < raw.length && i < G.buffer.length && raw[i].toLowerCase() === G.buffer[i]) i++;
+  if (i < G.buffer.length) applyBackspace(i);          // deletions
+  for (const ch of raw.slice(i)) applyChar(ch.toLowerCase()); // additions
+  el.typer.value = G.buffer;                            // keep field = validated prefix
+  renderPreview();
+});
+// Enter/Go just stays in the flow
+el.typer.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+
+function applyBackspace(toLen){
+  G.buffer = G.buffer.slice(0, toLen);
+  if (G.target){
+    G.target.typed = G.buffer.length;
+    renderWord(G.target);
+    if (!G.buffer.length){ unlock(); }
+  }
+}
+
+function applyChar(ch){
+  if (!/^[a-z ]$/.test(ch)) return;              // ignore digits/punctuation from autocorrect
+  if (!G.target && ch === ' ') return;           // stray spaces don't count against you
+  G.keysTotal++;
+
+  if (!G.target){
+    const next = G.buffer + ch;
+    const candidates = G.entities.filter(e => !e.done && e.word.startsWith(next));
+    if (candidates.length){
+      candidates.sort((a,b) => a.x - b.x);       // lock the one closest to escaping
+      lock(candidates[0]);
+      accept(ch);
+    } else typo();
+    return;
+  }
+  if (G.target.word[G.buffer.length] === ch) accept(ch);
+  else typo();
+}
+
+function accept(ch){
+  G.keysHit++;
+  G.buffer += ch;
+  G.target.typed = G.buffer.length;
+  renderWord(G.target);
+  if (G.buffer === G.target.word) completeEntity(G.target);
+  updateHUD();
+}
+
+function typo(){
+  G.combo = 0; G.mult = 1;
+  G.health = clamp(G.health - 1, 0, 100);
+  el.preview.classList.remove('err'); void el.preview.offsetWidth;
+  el.preview.classList.add('err');
+  if (G.target){
+    G.target.node.classList.remove('typo'); void G.target.node.offsetWidth;
+    G.target.node.classList.add('typo');
+  }
+  if (navigator.vibrate) navigator.vibrate(30);
+  updateHUD();
+  if (G.health <= 0) endGame();
+}
+
+function lock(ent){ G.target = ent; ent.node.classList.add('locked'); }
+function unlock(){
+  if (G.target){
+    G.target.node.classList.remove('locked');
+    G.target.typed = 0; renderWord(G.target);
+  }
+  G.target = null; G.buffer = ''; el.typer.value = '';
+}
+
+/* ============================================================
+   RESOLUTION — saves, cleanups, escapes
+   ============================================================ */
+function completeEntity(ent){
+  ent.done = true;
+  G.combo++;
+  G.peakCombo = Math.max(G.peakCombo, G.combo);
+  G.mult = Math.min(5, 1 + Math.floor(G.combo / 5));
+  const base = ent.word.replace(/ /g,'').length * (ent.t === 'threat' ? 12 : 9);
+  const pts = Math.round(base * G.mult);
+  G.score += pts;
+  G.health = clamp(G.health + (ent.t === 'threat' ? 4 : 2), 0, 100);
+  if (ent.t === 'threat') G.cleaned++; else G.saved++;
+
+  floatScore('+' + pts, ent);
+  ent.node.classList.remove('locked');
+  ent.node.classList.add('pop');
+  setTimeout(() => { ent.node.remove(); }, 420);
+  ent.remove = true;
+
+  showFact((ent.t === 'threat' ? '⚠️ ' : '🔬 ') + ent.f);
+  if (G.combo && G.combo % 5 === 0){
+    el.comboStat.classList.remove('hot'); void el.comboStat.offsetWidth;
+    el.comboStat.classList.add('hot');
+  }
+  G.target = null; G.buffer = ''; el.typer.value = '';
+  renderPreview(); updateHUD();
+}
+
+function escapeEntity(ent){
+  ent.done = true; ent.remove = true;
+  const dmg = ent.t === 'threat' ? 16 : 7;
+  G.health = clamp(G.health - dmg, 0, 100);
+  G.combo = 0; G.mult = 1;
+  floatScore('−' + dmg + ' ❤', ent, true);
+  ent.node.classList.add('sink');
+  setTimeout(() => ent.node.remove(), 520);
+  if (G.target === ent){ G.target = null; G.buffer=''; el.typer.value=''; renderPreview(); }
+  updateHUD();
+  if (G.health <= 0) endGame();
+}
+
+function floatScore(text, ent, bad){
+  const f = document.createElement('div');
+  f.className = 'float-score' + (bad ? ' bad' : '');
+  f.textContent = text;
+  const r = ent.node.getBoundingClientRect(), p = el.play.getBoundingClientRect();
+  f.style.left = clamp(r.left - p.left, 4, p.width - 70) + 'px';
+  f.style.top  = Math.max(0, r.top - p.top - 8) + 'px';
+  el.play.appendChild(f);
+  setTimeout(() => f.remove(), 950);
+}
+
+/* ============================================================
+   RENDERING — word chips, preview dock, HUD, facts
+   ============================================================ */
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function renderWord(ent){
+  const hit = ent.word.slice(0, ent.typed), rest = ent.word.slice(ent.typed);
+  ent.wordEl.innerHTML = `<span class="hit">${esc(hit)}</span>${esc(rest)}`;
+}
+function renderPreview(){
+  if (!G.target){
+    el.preview.innerHTML = document.activeElement === el.typer || G.state !== 'playing'
+      ? '<span class="idle">Start typing any word you see…</span>'
+      : '<span class="idle">👆 Tap here to open your keyboard</span>';
+    return;
+  }
+  const w = G.target.word, hit = w.slice(0, G.buffer.length), rest = w.slice(G.buffer.length);
+  el.preview.innerHTML =
+    `<span class="hit">${esc(hit)}</span><span class="caret"></span><span class="rest">${esc(rest)}</span>`;
+}
+function currentWPM(){
+  const mins = Math.max(1/60, G.elapsed/60);
+  return Math.round((G.keysHit/5) / mins);
+}
+function currentAcc(){
+  return G.keysTotal ? Math.round(G.keysHit/G.keysTotal*100) : 100;
+}
+function updateHUD(){
+  el.scoreV.textContent = G.score.toLocaleString();
+  el.comboV.textContent = '×' + G.mult + (G.combo ? ' · ' + G.combo : '');
+  el.accV.textContent = currentAcc() + '%';
+  el.healthV.textContent = Math.round(G.health);
+  el.healthFill.style.width = G.health + '%';
+  el.healthFill.classList.toggle('low', G.health <= 30);
+  el.healthFill.classList.toggle('mid', G.health > 30 && G.health <= 60);
+}
+function showFact(text){
+  el.fact.textContent = text;
+  el.fact.classList.add('show');
+  clearTimeout(G.factTimer);
+  G.factTimer = setTimeout(() => el.fact.classList.remove('show'), 3200);
+}
+
+/* ============================================================
+   FOCUS / KEYBOARD MANAGEMENT (mobile-critical)
+   ============================================================ */
+function focusTyper(){ el.typer.focus({preventScroll:true}); syncViewport(); }
+function hideKbOverlay(){ el.kbOverlay.classList.remove('on'); }
+
+function pauseGame(){
+  if (G.state !== 'playing') return;
+  G.state = 'paused';
+  cancelAnimationFrame(G.raf);
+}
+function resumeGame(){
+  if (G.state !== 'paused' || document.hidden) return;
+  G.state = 'playing';
+  const now = performance.now();
+  G.startAt += now - G.lastTs;   // paused time doesn't count toward difficulty/WPM
+  G.lastTs = now; G.lastSpawn = now;
+  G.raf = requestAnimationFrame(tick);
+}
+
+el.typer.addEventListener('focus', () => {
+  el.preview.classList.add('focused');
+  hideKbOverlay(); resumeGame(); renderPreview();
+  setTimeout(syncViewport, 300);   // after keyboard animation
+});
+el.typer.addEventListener('blur', () => {
+  el.preview.classList.remove('focused');
+  if (G.state === 'playing'){
+    // brief grace period — some keyboards blur/refocus during autocorrect
+    setTimeout(() => {
+      if (G.state === 'playing' && document.activeElement !== el.typer){
+        el.kbOverlay.classList.add('on');
+        pauseGame();               // don't let creatures escape with no keyboard up
+      }
+    }, 250);
+  }
+  renderPreview();
+});
+el.kbBtn.addEventListener('click', () => { hideKbOverlay(); focusTyper(); });
+// tapping anywhere in the game screen re-summons the keyboard
+el.game.addEventListener('pointerdown', e => {
+  if (G.state === 'playing' && e.target.closest('#kbBtn') === null) focusTyper();
+});
+// desktop: any kepress routes into the field
+window.addEventListener('keydown', () => {
+  if (G.state === 'playing' && document.activeElement !== el.typer) focusTyper();
+});
+// pause the clock while tabbed away
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame();
+  else if (G.state === 'paused'){ resumeGame(); focusTyper(); }
+});
+
+</script>
+</body>
+</html>
