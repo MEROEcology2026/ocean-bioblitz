@@ -577,6 +577,26 @@ function placeEntity(ent, now){
   ent.node.style.transform = `translate(${ent.x}px, ${ent.y + wob}px)`;
 }
 
+/* When the mobile keyboard opens/closes, the play area's height changes.
+   Re-map every creature's vertical position into the new visible water,
+   so nothing keeps swimming invisibly behind the keyboard. */
+let lastPlayH = 0;
+const playResize = new ResizeObserver(() => {
+  const ph = el.play.clientHeight;
+  if (lastPlayH > 0 && ph > 0 && ph !== lastPlayH){
+    const ratio = ph / lastPlayH;
+    const now = performance.now();
+    for (const ent of G.entities){
+      if (ent.done) continue;
+      const h = ent.node.offsetHeight || 70;
+      ent.y = clamp(ent.y * ratio, 6, Math.max(8, ph - h - 10));
+      placeEntity(ent, now);
+    }
+  }
+  if (ph > 0) lastPlayH = ph;
+});
+playResize.observe(el.play);
+
 function tick(now){
   if (G.state !== 'playing') return;
   const dt = Math.min(0.05, (now - G.lastTs)/1000);
